@@ -1,6 +1,6 @@
 {
   "name": "Automated Bing Searches",
-  "description": "Click the button on the popout and do the random bing searches. Optionally change the # of iterations and delay between searches.",
+  "description": "Haga clic en el botón en la ventana emergente y realice búsquedas al azar. Opcionalmente, cambie el número de iteraciones y el retraso entre búsquedas.",
   "version": "1.2.2",
   "manifest_version": 2,
   "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
