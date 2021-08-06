@@ -2,18 +2,31 @@ body {
   width: 300px;
   background-color: #424242;
   color: white;
-  padding: 0px 10px;
+  padding: 18px;
+  margin: 0px;
   font-size: 16px;
 }
 
 h2 {
-  margin-bottom: 5px;
+  margin: 0px 0px 10px 0px;
   text-align: center;
 }
 
 label {
   display: flex;
   cursor: pointer;
+}
+
+.row {
+  display: flex;
+}
+
+.row > * {
+  margin-right: 5px;
+}
+
+.fifty {
+  width: 50%;
 }
 
 input[type="checkbox"] {
@@ -26,7 +39,11 @@ input {
   color: white;
 }
 
-input:focus {
+select {
+  margin-bottom: 8px;
+}
+
+input:focus, select:focus {
   outline: none;
 }
 
@@ -65,10 +82,6 @@ input[type="button"]:hover {
   background-color: #388e3c;
 }
 
-#go {
-  margin-top: 5px;
-}
-
 a:visited {
   color: #2196f3;
 }
@@ -83,7 +96,7 @@ a:hover {
 }
 
 .option-wrapper {
-  margin-top: 10px;
+  margin-top: 5px;
   display: flex;
 }
 
@@ -91,19 +104,18 @@ a:hover {
   margin-right: 5px;
 }
 
-.input-wrapper {
-  display: flex;
+#static-search-input-wrapper, #random-search-input-wrapper {
+  /* visibility will be changed based off random search preference */
+  display: none;
 }
 
 #iteration-count-wrapper {
-  display: none; /* display will be flex when displayed (during iterations) */
-  align-items: center;
-  justify-content: center;
-  width: 140px;
+  /* visibility will be changed during iterations */
+  display: none;
 }
 
 #iteration-count-wrapper > div {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
 }

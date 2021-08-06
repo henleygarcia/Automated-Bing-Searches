@@ -1,74 +1,189 @@
-const DEFAULT_NUM_ITERATIONS = 30;
-const DEFAULT_DELAY = 600;
+const port = chrome.runtime.connect();
 
-const iterationCount = document.getElementById('iteration-count');
+const staticSearchesWrapper = document.getElementById('static-search-input-wrapper');
+const randomSearchesWrapper = document.getElementById('random-search-input-wrapper');
+
+const iterationCount1 = document.getElementById('iteration-count-1');
+const iterationCount2 = document.getElementById('iteration-count-2');
 const iterationCountWrapper = document.getElementById('iteration-count-wrapper');
 
-function saveChanges() {
-  chrome.storage.local.set({
-    numIterations: document.getElementById('numIterations').value,
-    delay: document.getElementById('delay').value,
-  });
+// if we are spoofing desktop searches, show a count labelled 'desktop'. same for mobile.
+// if we are not spoofing anything, then just display an unlabelled count.
+function setCountDisplayText({
+  numIterations,
+  overallCount,
+  containsDesktop,
+  containsMobile,
+  desktopRemaining,
+  mobileRemaining,
+}) {
+  if (numIterations === overallCount) {
+    clearCountDisplayText();
+    return;
+  }
+  iterationCountWrapper.style = 'display: block;';
+
+  if (containsDesktop) {
+    iterationCount1.innerText = `${desktopRemaining} (desktop)`;
+  }
+  if (containsMobile) {
+    const el = containsDesktop ? iterationCount2 : iterationCount1;
+    el.innerText = `${mobileRemaining} (mobile)`;
+  }
+  if (!containsDesktop && !containsMobile) {
+    iterationCount1.innerText = numIterations - overallCount;
+  }
 }
 
-let searchInterval;
-function startSearches(numIterations, delay) {
-  clearInterval(searchInterval);
+function clearCountDisplayText() {
+  iterationCount1.innerText = '';
+  iterationCount2.innerText = '';
+  iterationCountWrapper.style = 'display: none;';
+}
 
-  const search = (() => {
-    let count = 0;
-    return () => {
-      chrome.tabs.update({
-        url: `https://bing.com/search?q=${Math.random().toString(36).substr(2)}`,
-      });
-      return ++count;
-    };
-  })();
-
-  search();
-  iterationCount.innerText = numIterations - 1;
-  iterationCountWrapper.style = 'display: flex;';
-
-  searchInterval = setInterval(() => {
-    const count = search();
-    if (count >= numIterations) {
-      clearInterval(searchInterval);
-      iterationCount.innerText = '';
-      iterationCountWrapper.style = 'display: none;';
-    } else {
-      iterationCount.innerText = numIterations - count;
+port.onMessage.addListener(msg => {
+  switch(msg.type) {
+    case constants.MESSAGE_TYPES.UPDATE_SEARCH_COUNTS: {
+      setCountDisplayText(msg);
+      break;
     }
-  }, delay);
+    case constants.MESSAGE_TYPES.CLEAR_SEARCH_COUNTS: {
+      clearCountDisplayText();
+      break;
+    }
+    default: break;
+  }
+});
+chrome.runtime.sendMessage({
+  type: constants.MESSAGE_TYPES.GET_SEARCH_COUNTS,
+});
+
+function updateSearchInputsVisibility() {
+  if (document.getElementById('random-search').checked) {
+    staticSearchesWrapper.style = 'display: none;';
+    randomSearchesWrapper.style = 'display: block;';
+  } else {
+    staticSearchesWrapper.style = 'display: block;';
+    randomSearchesWrapper.style = 'display: none;';
+  }
 }
 
-function reset() {
-  document.getElementById('numIterations').value = DEFAULT_NUM_ITERATIONS;
-  document.getElementById('delay').value = DEFAULT_DELAY;
+// id is HTML id attribute
+// elementKey is how to get the value of that element (depends on type of input)
+// preferenceKey the is key in chrome storage and constants.DEFAULT_PREFERENCES
+const preferenceBindings = [
+  { id: 'desktop-iterations', elementKey: 'value', preferenceKey: 'desktopIterations' },
+  { id: 'mobile-iterations', elementKey: 'value', preferenceKey: 'mobileIterations' },
+  { id: 'delay', elementKey: 'value', preferenceKey: 'delay' },
+  { id: 'random-search-iterations-min', elementKey: 'value', preferenceKey: 'randomSearchIterationsMin' },
+  { id: 'random-search-iterations-max', elementKey: 'value', preferenceKey: 'randomSearchIterationsMax' },
+  { id: 'random-search-delay-min', elementKey: 'value', preferenceKey: 'randomSearchDelayMin' },
+  { id: 'random-search-delay-max', elementKey: 'value', preferenceKey: 'randomSearchDelayMax' },
+  { id: 'auto-click', elementKey: 'checked', preferenceKey: 'autoClick' },
+  { id: 'random-guesses', elementKey: 'checked', preferenceKey: 'randomGuesses' },
+  { id: 'platform-spoofing', elementKey: 'value', preferenceKey: 'platformSpoofing' },
+  { id: 'random-search', elementKey: 'checked', preferenceKey: 'randomSearch' },
+  { id: 'blitz-search', elementKey: 'checked', preferenceKey: 'blitzSearch' },
+];
+
+getStorage(
+  preferenceBindings.map(({ id, elementKey, preferenceKey }) => ({
+    key: preferenceKey,
+    cb: value => {
+      // value could be false, in which case the shortcut || operator
+      // would evaluate to the default (not intended)
+      document.getElementById(id)[elementKey] = value === undefined
+        ? constants.DEFAULT_PREFERENCES[preferenceKey]
+        : value;
+    },
+  })),
+).then(updateSearchInputsVisibility);
+
+function saveChanges() {
+  updateSearchInputsVisibility();
+  const newPreferences = preferenceBindings.reduce((acc, binding) => ({
+    ...acc,
+    [binding.preferenceKey]: document.getElementById(binding.id)[binding.elementKey],
+  }), {});
+  setStorage(newPreferences);
+}
+
+function reset(e) {
+  e.preventDefault(); // the reset button is actually a link, so we don't want it to redirect
+  if (document.getElementById('random-search').checked) {
+    document.getElementById('random-search-iterations-min').value = constants.DEFAULT_PREFERENCES.randomSearchIterationsMin;
+    document.getElementById('random-search-iterations-max').value = constants.DEFAULT_PREFERENCES.randomSearchIterationsMax;
+    document.getElementById('random-search-delay-min').value = constants.DEFAULT_PREFERENCES.randomSearchDelayMin;
+    document.getElementById('random-search-delay-max').value = constants.DEFAULT_PREFERENCES.randomSearchDelayMax;
+  } else {
+    document.getElementById('desktop-iterations').value = constants.DEFAULT_PREFERENCES.desktopIterations;
+    document.getElementById('mobile-iterations').value = constants.DEFAULT_PREFERENCES.mobileIterations;
+    document.getElementById('delay').value = constants.DEFAULT_PREFERENCES.delay;
+  }
   saveChanges();
 }
 
-// load the saved values from the Chrome extension storage API
-chrome.storage.local.get(['numIterations', 'delay'], function(result) {
-  const numIterations = result['numIterations'] || DEFAULT_NUM_ITERATIONS;
-  const delay = result['delay'] || DEFAULT_DELAY;
-  document.getElementById('numIterations').value = numIterations;
-  document.getElementById('delay').value = delay;
+function openOptions(e) {
+  e.preventDefault(); // the open-options button is actually a link, so we don't want it to redirect
+  if (chrome.runtime.openOptionsPage) {
+    chrome.runtime.openOptionsPage();
+  } else {
+    window.open(chrome.runtime.getURL('options.html'));
+  }
+}
+
+// id is HTML id attribute
+// eventType is the type of event to listen for
+// fn is what to run when the event occurs (defaults to saveChanges)
+const changeBindings = [
+  { id: 'desktop-iterations', eventType: 'input' },
+  { id: 'mobile-iterations', eventType: 'input' },
+  { id: 'delay', eventType: 'input' },
+  { id: 'random-search', eventType: 'change' },
+  { id: 'random-search-iterations-min', eventType: 'input' },
+  { id: 'random-search-iterations-max', eventType: 'input' },
+  { id: 'random-search-delay-min', eventType: 'input' },
+  { id: 'random-search-delay-max', eventType: 'input' },
+  { id: 'auto-click', eventType: 'change' },
+  { id: 'random-guesses', eventType: 'change' },
+  { id: 'platform-spoofing', eventType: 'change' },
+  { id: 'blitz-search', eventType: 'change' },
+  { id: 'reset', eventType: 'click', fn: reset },
+  { id: 'open-options', eventType: 'click', fn: openOptions },
+  { id: 'stop', eventType: 'click', fn: stopSearches },
+];
+
+changeBindings.forEach(({ id, eventType, fn = saveChanges }) => {
+  document.getElementById(id).addEventListener(eventType, fn);
 });
 
-document.getElementById('numIterations').addEventListener('input', saveChanges);
-document.getElementById('delay').addEventListener('input', saveChanges);
-document.getElementById('go').addEventListener('click', () => {
-  startSearches(
-    document.getElementById('numIterations').value,
-    document.getElementById('delay').value,
-  );
-});
-document.getElementById('reset').addEventListener('click', reset);
+function startSearches() {
+  port.postMessage({ type: constants.MESSAGE_TYPES.START_SEARCH });
+}
 
-chrome.storage.local.get(['autoClick'], ({ autoClick }) => {
-  document.getElementById('auto-click').checked = autoClick;
-});
+function stopSearches() {
+  port.postMessage({ type: constants.MESSAGE_TYPES.STOP_SEARCH });
+}
 
-document.getElementById('auto-click').addEventListener('change', function() {
-  chrome.storage.local.set({ autoClick: this.checked });
+chrome.commands.onCommand.addListener(command => {
+  if (command === 'start-searches') startSearches();
+});
+document.getElementById('search').addEventListener('click', startSearches);
+
+document.getElementById('open-reward-tasks').addEventListener('click', async () => {
+  const tab = await getCurrentTab();
+  function openRewardTasks() {
+    chrome.tabs.sendMessage(tab.id, { type: 'OPEN_REWARD_TASKS' });
+  }
+  if (tab && tab.url.includes('https://account.microsoft.com/rewards')) {
+      openRewardTasks();
+  } else {
+    chrome.tabs.update({
+      url: 'https://account.microsoft.com/rewards',
+    }, () => {
+      // this 5s timeout is hack, but it works for the most part (unless your internet or browser speed is very slow)
+      // and even if it doesn't work, you just have to click the button again
+      setTimeout(openRewardTasks, 5000);
+    });
+  }
 });
